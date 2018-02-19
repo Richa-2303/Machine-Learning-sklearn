@@ -9,48 +9,31 @@ Created on Sat Feb 10 19:09:53 2018
 
 import cx_Oracle as db
 import datetime as dt
-import csv
-from collections import OrderedDict
-import pickle as pk
-import pandas as pd
 import os
 
 
 
-def compile_data(dbfile,tickerList):
-    finalfilename="securitysharepricedetails_"+dt.date.today()+".csv"
-    main_df=pd.read_csv('ml_project/{}.csv'.format(dbfile))   
-    for ticker in tickerList:
-        df=pd.read_csv('ml_project/{}.csv'.format(ticker))
-        df.set_index('Date',inplace=True)
-        df.drop(['Open','Close','High','Low','Volume'],1,inplace=True)
-        df.insert(3,'Ticker',ticker,inplace=True)
-        main_df=pd.merge(main_df,df, how='left',left_on='Xref_ticker,effective_date',right_on='Ticker','Date')
+def csv_to_numpy_train(fileLocation):
     
-    main_df.to_csv(finalfilename)
     
-    return finalfilename
-
-def get_data_from_yahoo(tickerList,start,end):
-    
+    from numpy import genfromtxt
+    my_data = genfromtxt(fileLocation, delimiter=',')
            
-    for ticker in tickerList:
-        if not os.path.exists('ml_project/{}.csv'.format(ticker)):
-            df=web.DataReader(ticker,'yahoo',start,end)
-            df.to_csv('ml_project/{}.csv'.format(ticker))
-        else:
-            print('Already have {}'.format(ticker))
-            
-     
-
-def requestprocessor(dbdetails, fetaures, tickerList , filtercond, start ,end):
+    features=my_data[:,:-1]
+    target=my_data[:,-1:]
+    return features,target
+    
+def csv_to_numpy_pred(fileLocation):
+  
+    from numpy import genfromtxt
+    features = genfromtxt(fileLocation, delimiter=',')
+           
+    return features  
+    
+    
+def db_to_csv(dbdetails, fetaures, isinList , filtercond, start ,end):
     dbfile='dbfile'+dt.date.today()+'.csv'
-    dict1={}
-    dict2={}
-    start=datetime.strptime(start,'%Y%m%d')
-    end=datetime.strptime(end,'%Y%m%d')
     conn=db.connect(dbdetails)
-    yahoofxdata=get_data_from_yahoo(tickerList,start,end)
     
     if not os.path.exists('ml_project'):
         os.mkdir('ml_project')
@@ -60,7 +43,9 @@ def requestprocessor(dbdetails, fetaures, tickerList , filtercond, start ,end):
     cur=conn.cursor()
     table=''
     if filtercond is None:
-        filtercond=1=1
+        filtercond=''
+        
+        
         
     query='select '+ fetaures + output +' from '+ table + ' where ' +filtercond
     
@@ -71,9 +56,37 @@ def requestprocessor(dbdetails, fetaures, tickerList , filtercond, start ,end):
     cur.close();
     dbfile.close(); 
     
-    get_data_from_yahoo(tickerList,start,end)
-    finalfilename=compile_data(dbfile,tickerList) 
+def buyselltrainer():
     
-def 
+    feature,target=csv_to_numpy_train()
+    
+    
+    from ClassifyDT import classify
+    clf=classify()
+    from sklearn.cross_validation import train_test_split
+    feature_train,feature_test,target_train,target_test=train_test_split(feature,target,test_size=0.5,random_state=42)
+    clf.fit(feature_train,target_train)
+    pred=clf.predict(feature_test)
+    from sklearn.metrics import accuracy_score
+    accuracy=accuracy_score(target_test,pred)
+    print(accuracy)
+    return clf
+    
+def buysellpredicter(fileLocation):   
+    
+    clf=buyselltrainer()
+    features=csv_to_numpy_pred(fileLocation)
+    pred=clf.predict(features)
+    print(pred)
+
+def requestProcessor(dbdetails, fetaures, isinList , filtercond, start ,end,fileLocation):
+    
+    db_to_csv(dbdetails, fetaures, isinList , filtercond, start ,end)
+    buyselltrainer()
+    buysellpredicter(fileLocation)
+    
+
+    
+    
         
     
